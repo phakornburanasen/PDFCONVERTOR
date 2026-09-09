@@ -5,9 +5,15 @@ import express from 'express'
 import libre from 'libreoffice-convert'
 import multer from 'multer'
 import { existsSync, readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const FONTS_DIR = path.join(__dirname, 'fonts')
 
 const app = express()
 const convertAsync = promisify(libre.convert)
@@ -23,6 +29,9 @@ const PORT = Number(process.env.PORT || 4000)
 const HOST = process.env.HOST || '0.0.0.0'
 const allowedOfficeExtensions = new Set(['docx', 'xlsx', 'pptx'])
 const thaiFontCandidates = [
+  path.join(FONTS_DIR, 'Sarabun-Regular.ttf'),
+  path.join(FONTS_DIR, 'tahoma.ttf'),
+  path.join(FONTS_DIR, 'segoeui.ttf'),
   'C:/Windows/Fonts/Sarabun-Regular.ttf',
   'C:/Windows/Fonts/THSarabunNew.ttf',
   'C:/Windows/Fonts/tahoma.ttf',
@@ -33,6 +42,9 @@ const thaiFontCandidates = [
   '/usr/share/fonts/truetype/noto/NotoSansThai-Regular.ttf',
 ]
 const thaiBoldFontCandidates = [
+  path.join(FONTS_DIR, 'Sarabun-Bold.ttf'),
+  path.join(FONTS_DIR, 'tahomabd.ttf'),
+  path.join(FONTS_DIR, 'segoeuib.ttf'),
   'C:/Windows/Fonts/Sarabun-Bold.ttf',
   'C:/Windows/Fonts/THSarabunNew Bold.ttf',
   'C:/Windows/Fonts/tahomabd.ttf',
@@ -43,27 +55,7 @@ const thaiBoldFontCandidates = [
   '/usr/share/fonts/truetype/noto/NotoSansThai-Bold.ttf',
 ]
 
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (!origin) {
-        callback(null, true)
-        return
-      }
-
-      try {
-        const { hostname, port } = new URL(origin)
-        const isAllowedPort = port === '3000'
-        const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1'
-        const isLanIp = /^(10|172\.(1[6-9]|2\d|3[0-1])|192\.168)\./.test(hostname)
-
-        callback(null, isAllowedPort && (isLocalhost || isLanIp))
-      } catch {
-        callback(null, false)
-      }
-    },
-  }),
-)
+app.use(cors({ origin: '*' }))
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'PDFCONVERTOR backend' })

@@ -1,5 +1,5 @@
 import {
-  useCallback,
+  
   useEffect,
   useRef,
   useState,
@@ -10,7 +10,7 @@ import {
   type ChangeEvent,
 } from 'react'
 import * as pdfjsLib from 'pdfjs-dist'
-import workerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url'
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import './App.css'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
@@ -232,7 +232,7 @@ function App() {
     // Move mode: clicking empty area does nothing (panning is handled by pointer events)
   }
 
-  function handlePagePointerDown(page: RenderedPage, event: PointerEvent<HTMLDivElement>) {
+  function handlePagePointerDown(_page: RenderedPage, event: PointerEvent<HTMLDivElement>) {
     if (activeTool === 'move') {
       const panel = documentPanelRef.current
       if (!panel) return
@@ -399,7 +399,7 @@ function App() {
         canvas.height = Math.floor(viewport.height)
         await page.render({ canvas, canvasContext: context, viewport }).promise
         dataUrl = canvas.toDataURL('image/png')
-        await pdf.destroy()
+        await pdf.cleanup()
       } else {
         // Read image file as data URL
         dataUrl = await readFileAsDataUrl(file)
