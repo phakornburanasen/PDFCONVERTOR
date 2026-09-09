@@ -1,0 +1,62 @@
+:root {
+  --text: #56606f;
+  --text-h: #111827;
+  --bg: #f5f7fb;
+  --surface: #ffffff;
+  --border: #d9dee8;
+  --accent: #0f766e;
+  --accent-bg: #e7f5f2;
+  --accent-border: #78c9bc;
+  --danger: #b42318;
+  --soft-button: #eef2f7;
+  --shadow: 0 14px 38px rgba(17, 24, 39, 0.08);
+  --thai-sans: Sarabun, 'Noto Sans Thai', Tahoma, system-ui, sans-serif;
+
+  font: 16px/1.55 var(--thai-sans);
+  letter-spacing: 0;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1,
+h2 {
+  color: var(--text-h);
+  font-weight: 750;
+}
+
+h1 {
+  font-size: 34px;
+  line-height: 1.12;
+}
+
+h2 {
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+@media (max-width: 900px) {
+  h1 {
+    font-size: 30px;
+  }
+}
