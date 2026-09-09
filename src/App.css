@@ -1,12 +1,15 @@
 .app-frame {
-  min-height: 100svh;
+  height: 100svh;
+  display: flex;
+  flex-direction: column;
 }
 
 .top-navbar {
+  flex: 0 0 auto;
   position: sticky;
   top: 0;
   z-index: 20;
-  width: min(1440px, calc(100% - 28px));
+  width: calc(100% - 28px);
   min-height: 74px;
   margin: 0 auto;
   padding: 12px 0 10px;
@@ -120,13 +123,14 @@
 }
 
 .app-shell {
-  width: min(1440px, calc(100% - 28px));
+  flex: 1;
+  min-height: 0;
+  width: calc(100% - 28px);
   margin: 0 auto;
   padding: 10px 0 18px;
   display: grid;
   grid-template-columns: 340px minmax(0, 1fr);
   gap: 18px;
-  min-height: calc(100svh - 74px);
 }
 
 .tool-panel,
@@ -138,13 +142,11 @@
 }
 
 .tool-panel {
-  align-self: start;
+  align-self: stretch;
+  min-height: 0;
   padding: 20px;
   display: grid;
   gap: 18px;
-  position: sticky;
-  top: 18px;
-  max-height: calc(100svh - 100px);
   overflow-y: auto;
 }
 
@@ -534,7 +536,7 @@ button:focus-visible,
 
 /* --- Document Panel --- */
 .document-panel {
-  min-height: calc(100svh - 102px);
+  min-height: 0;
   overflow: auto;
   background: #e8edf4;
 }
@@ -606,7 +608,7 @@ button:focus-visible,
 
 .pages {
   --zoom-scale: 1;
-  width: max(100%, calc(980px * var(--zoom-scale)));
+  width: 100%;
   min-width: max-content;
   margin: 0;
   padding: 24px;
@@ -617,7 +619,7 @@ button:focus-visible,
 
 .pdf-page {
   position: relative;
-  width: calc(min(100vw - 420px, 980px) * var(--zoom-scale));
+  width: calc(min(100%, 980px) * var(--zoom-scale));
   min-width: calc(320px * var(--zoom-scale));
   max-width: none;
   overflow: hidden;
@@ -697,7 +699,8 @@ button:focus-visible,
 .sig-handle-se { bottom: -5px; right: -5px; }
 
 .empty-preview {
-  min-height: calc(100svh - 102px);
+  height: 100%;
+  min-height: 300px;
   display: grid;
   place-content: center;
   gap: 8px;
@@ -711,7 +714,7 @@ button:focus-visible,
 
 @media (max-width: 980px) {
   .top-navbar {
-    width: min(100% - 20px, 720px);
+    width: calc(100% - 20px);
     min-height: auto;
     padding: 8px 0;
     grid-template-columns: 1fr;
@@ -748,9 +751,8 @@ button:focus-visible,
 
   .app-shell {
     grid-template-columns: 1fr;
-    width: min(100% - 20px, 720px);
+    width: calc(100% - 20px);
     padding: 8px 0 10px;
-    min-height: auto;
   }
 
   .tool-panel {
@@ -759,7 +761,7 @@ button:focus-visible,
   }
 
   .pages {
-    width: max(100%, calc(696px * var(--zoom-scale)));
+    width: 100%;
     padding: 12px;
   }
 
@@ -773,7 +775,7 @@ button:focus-visible,
   }
 
   .pdf-page {
-    width: calc(min(100vw - 44px, 696px) * var(--zoom-scale));
+    width: calc(min(100%, 696px) * var(--zoom-scale));
     min-width: calc(280px * var(--zoom-scale));
   }
 }
