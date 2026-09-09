@@ -1,5 +1,5 @@
 import {
-  
+
   useEffect,
   useRef,
   useState,
@@ -72,7 +72,7 @@ function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedSignatureId, setSelectedSignatureId] = useState<string | null>(null)
   const [activeTool, setActiveTool] = useState<Tool>('text')
-  const [draftText, setDraftText] = useState('สำนักงาน กำลังทดสอบ')
+  const [draftText, setDraftText] = useState('ทดสอบ ข้อความ')
   const [fontFamily, setFontFamily] = useState(fontOptions[0])
   const [fontSize, setFontSize] = useState(24)
   const [color, setColor] = useState('#111827')
@@ -245,7 +245,7 @@ function App() {
         scrollLeft: panel.scrollLeft,
         scrollTop: panel.scrollTop,
       })
-      ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+        ; (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
     }
   }
 
