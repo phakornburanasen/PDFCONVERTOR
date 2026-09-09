@@ -615,6 +615,59 @@ button:focus-visible,
   font-weight: 650;
 }
 
+.preview-toolbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ruler-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 650;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text-h);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ruler-btn:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.ruler-btn.active {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+}
+
+.clear-guides-btn {
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  background: #fff0ed;
+  color: var(--danger);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.clear-guides-btn:hover {
+  background: var(--danger);
+  color: #ffffff;
+  border-color: var(--danger);
+}
+
 .zoom-controls {
   display: inline-flex;
   align-items: center;
@@ -654,19 +707,181 @@ button:focus-visible,
   margin: 0;
   padding: 24px;
   display: grid;
-  gap: 24px;
+  gap: 28px;
   justify-items: center;
+}
+
+/* --- Ruler & Guidelines Layout --- */
+.pdf-page-wrapper {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  width: calc(min(100%, 980px) * var(--zoom-scale));
+  min-width: calc(320px * var(--zoom-scale));
+}
+
+.pdf-page-wrapper.with-ruler {
+  grid-template-columns: 24px 1fr;
+  grid-template-rows: 24px 1fr;
+  box-shadow: 0 10px 28px rgba(17, 24, 39, 0.18);
+  border-radius: 6px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.ruler-corner {
+  width: 24px;
+  height: 24px;
+  background: #e2e8f0;
+  border-right: 1px solid #cbd5e1;
+  border-bottom: 1px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 750;
+  color: #475569;
+  user-select: none;
+}
+
+.ruler-top {
+  position: relative;
+  height: 24px;
+  overflow: hidden;
+  cursor: crosshair;
+  user-select: none;
+  border-bottom: 1px solid #cbd5e1;
+  background: #f8fafc;
+}
+
+.ruler-left {
+  position: relative;
+  width: 24px;
+  overflow: hidden;
+  cursor: crosshair;
+  user-select: none;
+  border-right: 1px solid #cbd5e1;
+  background: #f8fafc;
+}
+
+.ruler-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  color: #475569;
+}
+
+.ruler-tracker-v {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #ef4444;
+  pointer-events: none;
+  z-index: 5;
+  transform: translateX(-50%);
+}
+
+.ruler-tracker-h {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #ef4444;
+  pointer-events: none;
+  z-index: 5;
+  transform: translateY(-50%);
 }
 
 .pdf-page {
   position: relative;
-  width: calc(min(100%, 980px) * var(--zoom-scale));
-  min-width: calc(320px * var(--zoom-scale));
+  width: 100%;
   max-width: none;
   overflow: hidden;
   background: #ffffff;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.pdf-page-wrapper:not(.with-ruler) .pdf-page {
   border-radius: 4px;
   box-shadow: 0 10px 28px rgba(17, 24, 39, 0.18);
+}
+
+/* --- Guidelines on PDF --- */
+.guideline {
+  position: absolute;
+  z-index: 15;
+  user-select: none;
+}
+
+.guideline-v {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #0284c7;
+  cursor: col-resize;
+  transform: translateX(-50%);
+}
+
+.guideline-v::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  right: -5px;
+  cursor: col-resize;
+}
+
+.guideline-h {
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #0284c7;
+  cursor: row-resize;
+  transform: translateY(-50%);
+}
+
+.guideline-h::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -5px;
+  bottom: -5px;
+  cursor: row-resize;
+}
+
+.guideline-badge {
+  position: absolute;
+  background: #0284c7;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 650;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.guideline-badge:hover {
+  background: #ef4444;
+  transform: scale(1.08);
+}
+
+.guideline-v .guideline-badge {
+  top: 6px;
+  left: 4px;
+}
+
+.guideline-h .guideline-badge {
+  left: 6px;
+  top: 4px;
 }
 
 .pdf-page img {

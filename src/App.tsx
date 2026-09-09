@@ -31,6 +31,13 @@ type Annotation = {
   rotation: number
 }
 
+type GuideLine = {
+  id: string
+  pageNumber: number
+  type: 'vertical' | 'horizontal'
+  position: number
+}
+
 type Signature = {
   id: string
   page: number
@@ -86,6 +93,10 @@ function App() {
   const [draggingSignatureId, setDraggingSignatureId] = useState<string | null>(null)
   const [zoomPercent, setZoomPercent] = useState(100)
   const [renderZoomPercent, setRenderZoomPercent] = useState(100)
+  const [showRuler, setShowRuler] = useState(true)
+  const [guideLines, setGuideLines] = useState<GuideLine[]>([])
+  const [draggingGuideId, setDraggingGuideId] = useState<string | null>(null)
+  const [hoverPos, setHoverPos] = useState<{ pageNumber: number; x: number; y: number } | null>(null)
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 })
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({})
@@ -249,7 +260,7 @@ function App() {
     }
   }
 
-  function handlePagePointerMove(event: PointerEvent<HTMLDivElement>) {
+  function handlePagePointerMove(pageNumber: number, event: PointerEvent<HTMLDivElement>) {
     if (activeTool === 'move' && isPanning) {
       const panel = documentPanelRef.current
       if (!panel) return
@@ -258,12 +269,76 @@ function App() {
       panel.scrollLeft = panStart.scrollLeft - dx
       panel.scrollTop = panStart.scrollTop - dy
     }
+
+    const rect = event.currentTarget.getBoundingClientRect()
+    setHoverPos({
+      pageNumber,
+      x: clamp((event.clientX - rect.left) / rect.width, 0, 1),
+      y: clamp((event.clientY - rect.top) / rect.height, 0, 1),
+    })
   }
 
   function handlePagePointerUp() {
     if (isPanning) {
       setIsPanning(false)
     }
+  }
+
+  function handleRulerClick(
+    type: 'vertical' | 'horizontal',
+    pageNumber: number,
+    event: MouseEvent<HTMLDivElement>,
+  ) {
+    event.stopPropagation()
+    const rect = event.currentTarget.getBoundingClientRect()
+    const position =
+      type === 'vertical'
+        ? clamp((event.clientX - rect.left) / rect.width, 0, 1)
+        : clamp((event.clientY - rect.top) / rect.height, 0, 1)
+
+    const newGuide: GuideLine = {
+      id: createId(),
+      pageNumber,
+      type,
+      position,
+    }
+    setGuideLines((current) => [...current, newGuide])
+  }
+
+  function handleGuidePointerDown(id: string, event: PointerEvent<HTMLDivElement>) {
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setDraggingGuideId(id)
+  }
+
+  function handleGuidePointerMove(
+    id: string,
+    pageNumber: number,
+    event: PointerEvent<HTMLDivElement>,
+  ) {
+    if (draggingGuideId !== id) return
+    const pageEl = pageRefs.current[pageNumber]
+    if (!pageEl) return
+    const rect = pageEl.getBoundingClientRect()
+    const guide = guideLines.find((g) => g.id === id)
+    if (!guide) return
+
+    const position =
+      guide.type === 'vertical'
+        ? clamp((event.clientX - rect.left) / rect.width, 0, 1)
+        : clamp((event.clientY - rect.top) / rect.height, 0, 1)
+
+    setGuideLines((current) =>
+      current.map((g) => (g.id === id ? { ...g, position } : g)),
+    )
+  }
+
+  function removeGuideLine(id: string) {
+    setGuideLines((current) => current.filter((g) => g.id !== id))
+  }
+
+  function clearAllGuideLines() {
+    setGuideLines([])
   }
 
   function addAnnotation(pageNumber = pages[0]?.pageNumber ?? 1, x = 0.18, y = 0.18) {
@@ -905,9 +980,30 @@ function App() {
           ref={documentPanelRef}
         >
           <div className="preview-toolbar">
-            <div>
+            <div className="preview-toolbar-info">
               <strong>Preview</strong>
               <span>{pages.length ? `${pages.length} page${pages.length > 1 ? 's' : ''}` : 'No document'}</span>
+            </div>
+
+            <div className="preview-toolbar-actions">
+              <button
+                type="button"
+                className={`ruler-btn ${showRuler ? 'active' : ''}`}
+                title={showRuler ? 'ปิดไม้บรรทัด' : 'เปิดไม้บรรทัด'}
+                onClick={() => setShowRuler((current) => !current)}
+              >
+                📐 ไม้บรรทัด
+              </button>
+              {guideLines.length > 0 && (
+                <button
+                  type="button"
+                  className="clear-guides-btn"
+                  title="ล้างเส้นบอกตำแหน่งทั้งหมด"
+                  onClick={clearAllGuideLines}
+                >
+                  ✕ ล้างเส้น ({guideLines.length})
+                </button>
+              )}
             </div>
 
             <div className="zoom-controls" aria-label="Document zoom controls">
@@ -945,72 +1041,141 @@ function App() {
           {pages.length > 0 ? (
             <div className="pages" style={{ '--zoom-scale': zoomScale } as CSSProperties}>
               {pages.map((page) => (
-                <div
-                  key={page.pageNumber}
-                  ref={(node) => {
-                    pageRefs.current[page.pageNumber] = node
-                  }}
-                  className="pdf-page"
-                  style={{
-                    aspectRatio: `${page.width} / ${page.height}`,
-                    cursor: activeTool === 'move' ? (isPanning ? 'grabbing' : 'grab') : toolConfig[activeTool].cursor,
-                  }}
-                  onClick={(event) => handlePageClick(page, event)}
-                  onPointerDown={(event) => handlePagePointerDown(page, event)}
-                  onPointerMove={handlePagePointerMove}
-                  onPointerUp={handlePagePointerUp}
-                >
-                  <img src={page.dataUrl} alt={`หน้า ${page.pageNumber}`} />
-
-                  {/* Text Annotations */}
-                  {annotations
-                    .filter((annotation) => annotation.page === page.pageNumber)
-                    .map((annotation) => (
-                      <button
-                        key={annotation.id}
-                        type="button"
-                        className={`annotation-box ${annotation.id === selectedId ? 'selected' : ''}`}
-                        style={{
-                          left: `${annotation.x * 100}%`,
-                          top: `${annotation.y * 100}%`,
-                          color: annotation.color,
-                          fontFamily: annotation.fontFamily,
-                          fontSize: annotation.fontSize * zoomScale,
-                          fontWeight: annotation.bold ? 700 : 400,
-                          fontStyle: annotation.italic ? 'italic' : 'normal',
-                          transform: `translate(-2px, -50%) rotate(${annotation.rotation || 0}deg)`,
-                          transformOrigin: 'left center',
-                        }}
-                        onPointerDown={(event) => handleAnnotationPointerDown(annotation.id, event)}
-                        onPointerMove={(event) => handleAnnotationPointerMove(annotation.id, event)}
-                        onPointerUp={() => setDraggingId(null)}
-                      >
-                        {annotation.text}
-                      </button>
-                    ))}
-
-                  {/* Signatures */}
-                  {signatures
-                    .filter((sig) => sig.page === page.pageNumber)
-                    .map((sig) => (
-                      <div
-                        key={sig.id}
-                        className={`signature-overlay ${sig.id === selectedSignatureId ? 'selected' : ''}`}
-                        style={{
-                          left: `${sig.x * 100}%`,
-                          top: `${sig.y * 100}%`,
-                          width: `${sig.width * 100}%`,
-                          height: `${sig.height * 100}%`,
-                          transform: `translate(-50%, -50%) rotate(${sig.rotation}deg)`,
-                          opacity: sig.opacity,
-                        }}
-                        onPointerDown={(event) => handleSignaturePointerDown(sig.id, event)}
-                        onPointerMove={(event) => handleSignaturePointerMove(sig.id, event)}
-                        onPointerUp={() => setDraggingSignatureId(null)}
-                      >
-                        <img src={sig.dataUrl} alt={sig.fileName} draggable={false} />
+                <div key={page.pageNumber} className={`pdf-page-wrapper ${showRuler ? 'with-ruler' : ''}`}>
+                  {showRuler && (
+                    <>
+                      <div className="ruler-corner" title="ไม้บรรทัด (เซนติเมตร)">
+                        cm
                       </div>
-                    ))}
+                      <div
+                        className="ruler-top"
+                        title="คลิกเพื่อปักเส้นบอกตำแหน่งแนวตั้ง"
+                        onClick={(event) => handleRulerClick('vertical', page.pageNumber, event)}
+                      >
+                        <RulerHorizontal maxCm={21} />
+                        {hoverPos?.pageNumber === page.pageNumber && (
+                          <div className="ruler-tracker-v" style={{ left: `${hoverPos.x * 100}%` }} />
+                        )}
+                      </div>
+                      <div
+                        className="ruler-left"
+                        title="คลิกเพื่อปักเส้นบอกตำแหน่งแนวนอน"
+                        onClick={(event) => handleRulerClick('horizontal', page.pageNumber, event)}
+                      >
+                        <RulerVertical maxCm={29.7} />
+                        {hoverPos?.pageNumber === page.pageNumber && (
+                          <div className="ruler-tracker-h" style={{ top: `${hoverPos.y * 100}%` }} />
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  <div
+                    ref={(node) => {
+                      pageRefs.current[page.pageNumber] = node
+                    }}
+                    className="pdf-page"
+                    style={{
+                      aspectRatio: `${page.width} / ${page.height}`,
+                      cursor:
+                        activeTool === 'move'
+                          ? isPanning
+                            ? 'grabbing'
+                            : 'grab'
+                          : toolConfig[activeTool].cursor,
+                    }}
+                    onClick={(event) => handlePageClick(page, event)}
+                    onPointerDown={(event) => handlePagePointerDown(page, event)}
+                    onPointerMove={(event) => handlePagePointerMove(page.pageNumber, event)}
+                    onPointerUp={handlePagePointerUp}
+                    onMouseLeave={() => setHoverPos(null)}
+                  >
+                    <img src={page.dataUrl} alt={`หน้า ${page.pageNumber}`} />
+
+                    {/* Guidelines */}
+                    {showRuler &&
+                      guideLines
+                        .filter((guide) => guide.pageNumber === page.pageNumber)
+                        .map((guide) => (
+                          <div
+                            key={guide.id}
+                            className={`guideline guideline-${guide.type === 'vertical' ? 'v' : 'h'}`}
+                            style={
+                              guide.type === 'vertical'
+                                ? { left: `${guide.position * 100}%` }
+                                : { top: `${guide.position * 100}%` }
+                            }
+                            onPointerDown={(event) => handleGuidePointerDown(guide.id, event)}
+                            onPointerMove={(event) =>
+                              handleGuidePointerMove(guide.id, page.pageNumber, event)
+                            }
+                            onPointerUp={() => setDraggingGuideId(null)}
+                          >
+                            <span
+                              className="guideline-badge"
+                              title="คลิกเพื่อลบเส้นนี้"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                removeGuideLine(guide.id)
+                              }}
+                            >
+                              {guide.type === 'vertical'
+                                ? `X: ${(guide.position * 21).toFixed(1)} cm`
+                                : `Y: ${(guide.position * 29.7).toFixed(1)} cm`} ✕
+                            </span>
+                          </div>
+                        ))}
+
+                    {/* Text Annotations */}
+                    {annotations
+                      .filter((annotation) => annotation.page === page.pageNumber)
+                      .map((annotation) => (
+                        <button
+                          key={annotation.id}
+                          type="button"
+                          className={`annotation-box ${annotation.id === selectedId ? 'selected' : ''}`}
+                          style={{
+                            left: `${annotation.x * 100}%`,
+                            top: `${annotation.y * 100}%`,
+                            color: annotation.color,
+                            fontFamily: annotation.fontFamily,
+                            fontSize: annotation.fontSize * zoomScale,
+                            fontWeight: annotation.bold ? 700 : 400,
+                            fontStyle: annotation.italic ? 'italic' : 'normal',
+                            transform: `translate(-2px, -50%) rotate(${annotation.rotation || 0}deg)`,
+                            transformOrigin: 'left center',
+                          }}
+                          onPointerDown={(event) => handleAnnotationPointerDown(annotation.id, event)}
+                          onPointerMove={(event) => handleAnnotationPointerMove(annotation.id, event)}
+                          onPointerUp={() => setDraggingId(null)}
+                        >
+                          {annotation.text}
+                        </button>
+                      ))}
+
+                    {/* Signatures */}
+                    {signatures
+                      .filter((sig) => sig.page === page.pageNumber)
+                      .map((sig) => (
+                        <div
+                          key={sig.id}
+                          className={`signature-overlay ${sig.id === selectedSignatureId ? 'selected' : ''}`}
+                          style={{
+                            left: `${sig.x * 100}%`,
+                            top: `${sig.y * 100}%`,
+                            width: `${sig.width * 100}%`,
+                            height: `${sig.height * 100}%`,
+                            transform: `translate(-50%, -50%) rotate(${sig.rotation}deg)`,
+                            opacity: sig.opacity,
+                          }}
+                          onPointerDown={(event) => handleSignaturePointerDown(sig.id, event)}
+                          onPointerMove={(event) => handleSignaturePointerMove(sig.id, event)}
+                          onPointerUp={() => setDraggingSignatureId(null)}
+                        >
+                          <img src={sig.dataUrl} alt={sig.fileName} draggable={false} />
+                        </div>
+                      ))}
+                  </div>
                 </div>
               ))}
             </div>
@@ -1054,6 +1219,102 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.onerror = () => reject(new Error('โหลดรูปไม่สำเร็จ'))
     img.src = src
   })
+}
+
+function RulerHorizontal({ maxCm = 21 }: { maxCm?: number }) {
+  const mm = Math.round(maxCm * 10)
+  const ticks = []
+  for (let i = 0; i <= mm; i++) {
+    const isCm = i % 10 === 0
+    const isHalfCm = i % 5 === 0 && !isCm
+    const h = isCm ? 12 : isHalfCm ? 7 : 4
+    ticks.push(
+      <line
+        key={`th-${i}`}
+        x1={i}
+        y1={20 - h}
+        x2={i}
+        y2={20}
+        stroke="currentColor"
+        strokeWidth={isCm ? 0.6 : 0.35}
+      />,
+    )
+    if (isCm && i < mm) {
+      ticks.push(
+        <text
+          key={`lh-${i}`}
+          x={i + 1.2}
+          y={8}
+          fontSize="5.5"
+          fill="currentColor"
+          fontFamily="system-ui, sans-serif"
+        >
+          {i / 10}
+        </text>,
+      )
+    }
+  }
+
+  return (
+    <svg
+      viewBox={`0 0 ${mm} 20`}
+      preserveAspectRatio="none"
+      className="ruler-svg"
+      aria-hidden="true"
+    >
+      <rect width={mm} height={20} fill="#f8fafc" />
+      <line x1="0" y1="19.5" x2={mm} y2="19.5" stroke="#cbd5e1" strokeWidth="0.5" />
+      {ticks}
+    </svg>
+  )
+}
+
+function RulerVertical({ maxCm = 29.7 }: { maxCm?: number }) {
+  const mm = Math.round(maxCm * 10)
+  const ticks = []
+  for (let i = 0; i <= mm; i++) {
+    const isCm = i % 10 === 0
+    const isHalfCm = i % 5 === 0 && !isCm
+    const w = isCm ? 12 : isHalfCm ? 7 : 4
+    ticks.push(
+      <line
+        key={`tv-${i}`}
+        x1={20 - w}
+        y1={i}
+        x2={20}
+        y2={i}
+        stroke="currentColor"
+        strokeWidth={isCm ? 0.6 : 0.35}
+      />,
+    )
+    if (isCm && i < mm) {
+      ticks.push(
+        <text
+          key={`lv-${i}`}
+          x={3}
+          y={i + 6.5}
+          fontSize="5.5"
+          fill="currentColor"
+          fontFamily="system-ui, sans-serif"
+        >
+          {i / 10}
+        </text>,
+      )
+    }
+  }
+
+  return (
+    <svg
+      viewBox={`0 0 20 ${mm}`}
+      preserveAspectRatio="none"
+      className="ruler-svg"
+      aria-hidden="true"
+    >
+      <rect width={20} height={mm} fill="#f8fafc" />
+      <line x1="19.5" y1="0" x2="19.5" y2={mm} stroke="#cbd5e1" strokeWidth="0.5" />
+      {ticks}
+    </svg>
+  )
 }
 
 export default App
