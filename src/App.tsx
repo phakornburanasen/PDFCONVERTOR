@@ -1009,14 +1009,6 @@ function App() {
                         onPointerUp={() => setDraggingSignatureId(null)}
                       >
                         <img src={sig.dataUrl} alt={sig.fileName} draggable={false} />
-                        {sig.id === selectedSignatureId && (
-                          <>
-                            <div className="sig-handle sig-handle-nw" />
-                            <div className="sig-handle sig-handle-ne" />
-                            <div className="sig-handle sig-handle-sw" />
-                            <div className="sig-handle sig-handle-se" />
-                          </>
-                        )}
                       </div>
                     ))}
                 </div>
