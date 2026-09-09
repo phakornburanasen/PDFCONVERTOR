@@ -516,6 +516,47 @@ button:focus-visible,
   color: #ffffff;
 }
 
+.rotation-control {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.rotation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-h);
+  font-weight: 650;
+}
+
+.rotation-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.rotation-actions button {
+  min-height: 26px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  background: var(--soft-button);
+  color: var(--text-h);
+  border: 1px solid var(--border);
+}
+
+.rotation-actions button:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.rotation-control input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
 .warning-message,
 .error-message {
   padding: 10px 12px;

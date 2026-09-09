@@ -9,7 +9,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
+import { degrees, PDFDocument, rgb, StandardFonts } from 'pdf-lib'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -104,6 +104,7 @@ app.post('/api/pdf/save', upload.single('file'), async (req, res) => {
 
   try {
     const annotations = parseAnnotations(req.body.annotations)
+    const signatures = parseSignatures(req.body.signatures)
     const pdfDoc = await PDFDocument.load(req.file.buffer)
     pdfDoc.registerFontkit(fontkit)
 
@@ -118,20 +119,54 @@ app.post('/api/pdf/save', upload.single('file'), async (req, res) => {
       return font
     }
 
+    // Draw text annotations
     for (const annotation of annotations) {
       const page = pdfDoc.getPage(annotation.page - 1)
       const { width, height } = page.getSize()
       const fontSize = clamp(Number(annotation.fontSize) || 24, 8, 96)
       const font = await getFontForAnnotation(annotation.fontFamily, annotation.bold)
+      const rot = Number(annotation.rotation) || 0
 
       page.drawText(String(annotation.text || ''), {
-        x: clamp(Number(annotation.x) || 0, 0, 1) * width,
-        y: height - clamp(Number(annotation.y) || 0, 0, 1) * height - fontSize * 0.45,
+        x: clamp(Number(annotation.x) || 0, 1) * width,
+        y: height - clamp(Number(annotation.y) || 0, 1) * height - fontSize * 0.45,
         size: fontSize,
         font,
         color: hexToRgb(annotation.color),
         lineHeight: fontSize * 1.25,
+        rotate: degrees(-rot),
       })
+    }
+
+    // Draw signatures
+    for (const sig of signatures) {
+      if (sig.page < 1 || sig.page > pdfDoc.getPageCount()) continue
+      const page = pdfDoc.getPage(sig.page - 1)
+      const { width, height } = page.getSize()
+      const sigWidth = (Number(sig.width) || 0.15) * width
+      const sigHeight = (Number(sig.height) || 0.1) * width
+      const centerX = clamp(Number(sig.x) || 0, 0, 1) * width
+      const centerY = height - clamp(Number(sig.y) || 0, 0, 1) * height
+      const rot = Number(sig.rotation) || 0
+
+      try {
+        const base64Data = sig.dataUrl.replace(/^data:image\/\w+;base64,/, '')
+        const imageBytes = Buffer.from(base64Data, 'base64')
+        const img = sig.dataUrl.startsWith('data:image/jpeg') || sig.dataUrl.startsWith('data:image/jpg')
+          ? await pdfDoc.embedJpg(imageBytes)
+          : await pdfDoc.embedPng(imageBytes)
+
+        page.drawImage(img, {
+          x: centerX - sigWidth / 2,
+          y: centerY - sigHeight / 2,
+          width: sigWidth,
+          height: sigHeight,
+          rotate: degrees(-rot),
+          opacity: clamp(Number(sig.opacity ?? 1), 0, 1),
+        })
+      } catch (imgError) {
+        console.warn('Failed to embed signature image:', imgError)
+      }
     }
 
     const pdfBytes = await pdfDoc.save()
@@ -340,6 +375,23 @@ function parseAnnotations(value) {
   }
 
   return parsed.filter((annotation) => Number.isInteger(annotation.page) && annotation.page > 0)
+}
+
+function parseSignatures(value) {
+  if (!value) {
+    return []
+  }
+  try {
+    const parsed = JSON.parse(value)
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+    return parsed.filter(
+      (sig) => Number.isInteger(sig.page) && sig.page > 0 && typeof sig.dataUrl === 'string',
+    )
+  } catch {
+    return []
+  }
 }
 
 async function resolveFont(pdfDoc, familyName, isBold) {

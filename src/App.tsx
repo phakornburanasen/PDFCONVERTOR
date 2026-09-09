@@ -28,6 +28,7 @@ type Annotation = {
   color: string
   bold: boolean
   italic: boolean
+  rotation: number
 }
 
 type Signature = {
@@ -77,6 +78,7 @@ function App() {
   const [color, setColor] = useState('#111827')
   const [bold, setBold] = useState(false)
   const [italic, setItalic] = useState(false)
+  const [rotation, setRotation] = useState(0)
   const [busyLabel, setBusyLabel] = useState('')
   const [error, setError] = useState('')
   const [warning, setWarning] = useState('')
@@ -288,6 +290,7 @@ function App() {
       color,
       bold,
       italic,
+      rotation,
     }
 
     setAnnotations((current) => [...current, annotation])
@@ -357,6 +360,7 @@ function App() {
     setColor(annotation.color)
     setBold(annotation.bold)
     setItalic(annotation.italic)
+    setRotation(annotation.rotation ?? 0)
   }
 
   function removeAnnotation(id: string) {
@@ -683,6 +687,59 @@ function App() {
                 </label>
               </div>
 
+              <div className="rotation-control">
+                <div className="rotation-header">
+                  <span>การหมุน: {rotation}°</span>
+                  <div className="rotation-actions">
+                    <button
+                      type="button"
+                      title="หมุนซ้าย 90°"
+                      onClick={() => {
+                        const nextRot = rotation - 90 < -180 ? rotation - 90 + 360 : rotation - 90
+                        setRotation(nextRot)
+                        applyStyleToSelected({ rotation: nextRot })
+                      }}
+                    >
+                      ↺ -90°
+                    </button>
+                    <button
+                      type="button"
+                      title="รีเซ็ต 0°"
+                      disabled={rotation === 0}
+                      onClick={() => {
+                        setRotation(0)
+                        applyStyleToSelected({ rotation: 0 })
+                      }}
+                    >
+                      0°
+                    </button>
+                    <button
+                      type="button"
+                      title="หมุนขวา 90°"
+                      onClick={() => {
+                        const nextRot = rotation + 90 > 180 ? rotation + 90 - 360 : rotation + 90
+                        setRotation(nextRot)
+                        applyStyleToSelected({ rotation: nextRot })
+                      }}
+                    >
+                      ↻ +90°
+                    </button>
+                  </div>
+                </div>
+                <input
+                  type="range"
+                  min="-180"
+                  max="180"
+                  step="1"
+                  value={rotation}
+                  onChange={(event) => {
+                    const nextRot = Number(event.target.value)
+                    setRotation(nextRot)
+                    applyStyleToSelected({ rotation: nextRot })
+                  }}
+                />
+              </div>
+
               <div className="segmented-controls">
                 <button type="button" className="add-text-button" disabled={!pages.length} onClick={() => addAnnotation()}>
                   เพิ่มข้อความ
@@ -921,6 +978,8 @@ function App() {
                           fontSize: annotation.fontSize * zoomScale,
                           fontWeight: annotation.bold ? 700 : 400,
                           fontStyle: annotation.italic ? 'italic' : 'normal',
+                          transform: `translate(-2px, -50%) rotate(${annotation.rotation || 0}deg)`,
+                          transformOrigin: 'left center',
                         }}
                         onPointerDown={(event) => handleAnnotationPointerDown(annotation.id, event)}
                         onPointerMove={(event) => handleAnnotationPointerMove(annotation.id, event)}
