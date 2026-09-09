@@ -52,7 +52,7 @@ type RenderedPage = {
 
 const acceptedTypes = '.pdf,.docx,.xlsx,.pptx'
 const signatureAcceptedTypes = '.png,.jpg,.jpeg,.pdf'
-const fontOptions = ['Sarabun', 'Noto Sans Thai', 'Tahoma', 'Arial']
+const fontOptions = ['Angsana New', 'Sarabun', 'Noto Sans Thai', 'Tahoma', 'Arial']
 const baseRenderScale = 1.35
 
 const toolConfig: Record<Tool, { label: string; icon: string; cursor: string }> = {

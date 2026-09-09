@@ -65,28 +65,68 @@ Supported annotation styling:
 
 DOCX export extracts the PDF text layer into editable Word text and appends added annotations as editable text. Complex PDF layouts, scanned files, multi-column documents, and advanced tables may not round-trip perfectly. Scanned PDFs need OCR before text can be extracted.
 
-## Thai Fonts on Linux/Ubuntu
+## Adding Custom Fonts (วิธีเพิ่มฟอนต์ใหม่)
 
-Install LibreOffice and common Thai fonts:
+หากต้องการเพิ่มฟอนต์ภาษาไทยใหม่ในระบบ ให้ทำตาม 3 ขั้นตอนนี้:
 
-```bash
-sudo apt-get update
-sudo apt-get install -y libreoffice fonts-thai-tlwg fonts-noto-core fonts-noto-ui-core fontconfig
-sudo fc-cache -f -v
-```
+1. **วางไฟล์ฟอนต์ `.ttf`:**
+   - คัดลอกไฟล์ฟอนต์นามสกุล `.ttf` (ทั้งตัวปกติและตัวหนา) ไปวางไว้ที่โฟลเดอร์:
+     ```text
+     backend/fonts/
+     ```
+     *(เช่น `MyFont-Regular.ttf` และ `MyFont-Bold.ttf`)*
 
-For a specific `Sarabun` or `TH Sarabun PSK` font, copy the `.ttf` files to:
+2. **แก้ไข `backend/server.js`:**
+   - เพิ่ม path ไฟล์ใน `thaiFontCandidates` และ `thaiBoldFontCandidates` (บรรทัด ~31-60):
+     ```javascript
+     const thaiFontCandidates = [
+       path.join(FONTS_DIR, 'MyFont-Regular.ttf'),
+       ...
+     ]
+     const thaiBoldFontCandidates = [
+       path.join(FONTS_DIR, 'MyFont-Bold.ttf'),
+       ...
+     ]
+     ```
+   - เพิ่มเงื่อนไขในฟังก์ชัน `resolveFont` (บรรทัด ~345):
+     ```javascript
+     if (norm.includes('myfont')) {
+       candidates = isBold
+         ? [path.join(FONTS_DIR, 'MyFont-Bold.ttf'), path.join(FONTS_DIR, 'Sarabun-Bold.ttf')]
+         : [path.join(FONTS_DIR, 'MyFont-Regular.ttf'), path.join(FONTS_DIR, 'Sarabun-Regular.ttf')]
+     }
+     ```
 
-```text
-/usr/share/fonts/truetype/thai/
-```
+3. **เพิ่มตัวเลือกใน Frontend (`src/App.tsx`):**
+   - เพิ่มชื่อฟอนต์ในอาร์เรย์ `fontOptions` (บรรทัด ~55) เพื่อให้แสดงใน Dropdown บนหน้าเว็บ:
+     ```typescript
+     const fontOptions = ['MyFont', 'Angsana New', 'Sarabun', 'Noto Sans Thai', 'Tahoma', 'Arial']
+     ```
 
-Then refresh the font cache:
+## Linux Deployment (การติดตั้งบน Linux)
 
-```bash
-sudo fc-cache -f -v
-```
+1. ติดตั้ง Node.js, LibreOffice และฟอนต์ระบบ:
+   ```bash
+   sudo apt-get update
+   sudo apt-get install -y nodejs npm libreoffice fonts-thai-tlwg fonts-noto-core fonts-noto-ui-core fontconfig
+   sudo fc-cache -f -v
+   ```
 
-For best Office-to-PDF layout accuracy, the font names used inside the Office file should exist on the backend machine.
+2. คัดลอกโฟลเดอร์ `backend/` (รวมถึง `backend/fonts/`) ไปที่เซิร์ฟเวอร์แล้วติดตั้ง dependencies:
+   ```bash
+   cd backend
+   npm install
+   ```
 
-For saving Thai text into edited PDF files, install at least one Thai-capable font such as Sarabun, Noto Sans Thai, Garuda, Tahoma, or TH Sarabun New on the backend machine.
+3. รัน backend ด้วย PM2:
+   ```bash
+   sudo npm install -g pm2
+   pm2 start server.js --name "pdf-backend"
+   pm2 startup
+   pm2 save
+   ```
+
+## Web Server / IIS Notes
+
+- หาก deploy Frontend บน **IIS (Windows Server)** ตรวจสอบให้แน่ใจว่าได้คัดลอกไฟล์ `dist/web.config` ไปด้วย เพื่อให้ IIS รองรับ MIME Type ของไฟล์ `.mjs` (PDF.js Worker)
+

@@ -29,6 +29,8 @@ const PORT = Number(process.env.PORT || 4000)
 const HOST = process.env.HOST || '0.0.0.0'
 const allowedOfficeExtensions = new Set(['docx', 'xlsx', 'pptx'])
 const thaiFontCandidates = [
+  path.join(FONTS_DIR, 'AngsanaNew.ttf'),
+  path.join(FONTS_DIR, 'AngsanaUPC.ttf'),
   path.join(FONTS_DIR, 'Sarabun-Regular.ttf'),
   path.join(FONTS_DIR, 'tahoma.ttf'),
   path.join(FONTS_DIR, 'segoeui.ttf'),
@@ -42,6 +44,8 @@ const thaiFontCandidates = [
   '/usr/share/fonts/truetype/noto/NotoSansThai-Regular.ttf',
 ]
 const thaiBoldFontCandidates = [
+  path.join(FONTS_DIR, 'AngsanaNew-Bold.ttf'),
+  path.join(FONTS_DIR, 'AngsanaUPC-Bold.ttf'),
   path.join(FONTS_DIR, 'Sarabun-Bold.ttf'),
   path.join(FONTS_DIR, 'tahomabd.ttf'),
   path.join(FONTS_DIR, 'segoeuib.ttf'),
@@ -102,19 +106,29 @@ app.post('/api/pdf/save', upload.single('file'), async (req, res) => {
     const annotations = parseAnnotations(req.body.annotations)
     const pdfDoc = await PDFDocument.load(req.file.buffer)
     pdfDoc.registerFontkit(fontkit)
-    const regularFont = await embedBestFont(pdfDoc, thaiFontCandidates)
-    const boldFont = await embedBestFont(pdfDoc, thaiBoldFontCandidates)
+
+    const fontCache = new Map()
+    async function getFontForAnnotation(family, isBold) {
+      const key = `${family || 'default'}_${Boolean(isBold)}`
+      if (fontCache.has(key)) {
+        return fontCache.get(key)
+      }
+      const font = await resolveFont(pdfDoc, family, isBold)
+      fontCache.set(key, font)
+      return font
+    }
 
     for (const annotation of annotations) {
       const page = pdfDoc.getPage(annotation.page - 1)
       const { width, height } = page.getSize()
       const fontSize = clamp(Number(annotation.fontSize) || 24, 8, 96)
+      const font = await getFontForAnnotation(annotation.fontFamily, annotation.bold)
 
       page.drawText(String(annotation.text || ''), {
         x: clamp(Number(annotation.x) || 0, 0, 1) * width,
         y: height - clamp(Number(annotation.y) || 0, 0, 1) * height - fontSize * 0.45,
         size: fontSize,
-        font: annotation.bold && boldFont ? boldFont : regularFont,
+        font,
         color: hexToRgb(annotation.color),
         lineHeight: fontSize * 1.25,
       })
@@ -326,6 +340,37 @@ function parseAnnotations(value) {
   }
 
   return parsed.filter((annotation) => Number.isInteger(annotation.page) && annotation.page > 0)
+}
+
+async function resolveFont(pdfDoc, familyName, isBold) {
+  const norm = String(familyName || '').toLowerCase().trim()
+  let candidates = []
+
+  if (norm.includes('angsa')) {
+    candidates = isBold
+      ? [
+          path.join(FONTS_DIR, 'AngsanaNew-Bold.ttf'),
+          path.join(FONTS_DIR, 'AngsanaUPC-Bold.ttf'),
+          path.join(FONTS_DIR, 'Sarabun-Bold.ttf'),
+        ]
+      : [
+          path.join(FONTS_DIR, 'AngsanaNew.ttf'),
+          path.join(FONTS_DIR, 'AngsanaUPC.ttf'),
+          path.join(FONTS_DIR, 'Sarabun-Regular.ttf'),
+        ]
+  } else if (norm.includes('tahoma')) {
+    candidates = isBold
+      ? [path.join(FONTS_DIR, 'tahomabd.ttf'), 'C:/Windows/Fonts/tahomabd.ttf', path.join(FONTS_DIR, 'Sarabun-Bold.ttf')]
+      : [path.join(FONTS_DIR, 'tahoma.ttf'), 'C:/Windows/Fonts/tahoma.ttf', path.join(FONTS_DIR, 'Sarabun-Regular.ttf')]
+  } else if (norm.includes('segoe')) {
+    candidates = isBold
+      ? [path.join(FONTS_DIR, 'segoeuib.ttf'), 'C:/Windows/Fonts/segoeuib.ttf', path.join(FONTS_DIR, 'Sarabun-Bold.ttf')]
+      : [path.join(FONTS_DIR, 'segoeui.ttf'), 'C:/Windows/Fonts/segoeui.ttf', path.join(FONTS_DIR, 'Sarabun-Regular.ttf')]
+  } else {
+    candidates = isBold ? thaiBoldFontCandidates : thaiFontCandidates
+  }
+
+  return embedBestFont(pdfDoc, candidates)
 }
 
 async function embedBestFont(pdfDoc, candidates) {
