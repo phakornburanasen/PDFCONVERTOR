@@ -104,6 +104,7 @@ app.post('/api/pdf/save', upload.single('file'), async (req, res) => {
 
   try {
     const annotations = parseAnnotations(req.body.annotations)
+    const masks = parseMasks(req.body.masks)
     const signatures = parseSignatures(req.body.signatures)
     const pdfDoc = await PDFDocument.load(req.file.buffer)
     pdfDoc.registerFontkit(fontkit)
@@ -119,8 +120,23 @@ app.post('/api/pdf/save', upload.single('file'), async (req, res) => {
       return font
     }
 
+    // Draw masks first so text annotations are always visible on top.
+    for (const mask of masks) {
+      if (mask.page < 1 || mask.page > pdfDoc.getPageCount()) continue
+      const page = pdfDoc.getPage(mask.page - 1)
+      const { width, height } = page.getSize()
+      page.drawRectangle({
+        x: clamp(Number(mask.x) || 0, 0, 1) * width,
+        y: height - (clamp(Number(mask.y) || 0, 0, 1) + clamp(Number(mask.height) || 0, 0, 1)) * height,
+        width: clamp(Number(mask.width) || 0, 0, 1) * width,
+        height: clamp(Number(mask.height) || 0, 0, 1) * height,
+        color: hexToRgb(mask.color),
+      })
+    }
+
     // Draw text annotations
     for (const annotation of annotations) {
+      if (annotation.page < 1 || annotation.page > pdfDoc.getPageCount()) continue
       const page = pdfDoc.getPage(annotation.page - 1)
       const { width, height } = page.getSize()
       const fontSize = clamp(Number(annotation.fontSize) || 24, 8, 96)
@@ -128,8 +144,8 @@ app.post('/api/pdf/save', upload.single('file'), async (req, res) => {
       const rot = Number(annotation.rotation) || 0
 
       page.drawText(String(annotation.text || ''), {
-        x: clamp(Number(annotation.x) || 0, 1) * width,
-        y: height - clamp(Number(annotation.y) || 0, 1) * height - fontSize * 0.45,
+        x: clamp(Number(annotation.x) || 0, 0, 1) * width,
+        y: height - clamp(Number(annotation.y) || 0, 0, 1) * height - fontSize * 0.45,
         size: fontSize,
         font,
         color: hexToRgb(annotation.color),
@@ -377,6 +393,17 @@ function parseAnnotations(value) {
   return parsed.filter((annotation) => Number.isInteger(annotation.page) && annotation.page > 0)
 }
 
+function parseMasks(value) {
+  if (!value) return []
+  try {
+    const parsed = JSON.parse(value)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((mask) => Number.isInteger(mask.page) && mask.page > 0)
+  } catch {
+    return []
+  }
+}
+
 function parseSignatures(value) {
   if (!value) {
     return []
@@ -396,31 +423,31 @@ function parseSignatures(value) {
 
 async function resolveFont(pdfDoc, familyName, isBold) {
   const norm = String(familyName || '').toLowerCase().trim()
-  let candidates = []
-
-  if (norm.includes('angsa')) {
-    candidates = isBold
-      ? [
-          path.join(FONTS_DIR, 'AngsanaNew-Bold.ttf'),
-          path.join(FONTS_DIR, 'AngsanaUPC-Bold.ttf'),
-          path.join(FONTS_DIR, 'Sarabun-Bold.ttf'),
-        ]
-      : [
-          path.join(FONTS_DIR, 'AngsanaNew.ttf'),
-          path.join(FONTS_DIR, 'AngsanaUPC.ttf'),
-          path.join(FONTS_DIR, 'Sarabun-Regular.ttf'),
-        ]
-  } else if (norm.includes('tahoma')) {
-    candidates = isBold
-      ? [path.join(FONTS_DIR, 'tahomabd.ttf'), 'C:/Windows/Fonts/tahomabd.ttf', path.join(FONTS_DIR, 'Sarabun-Bold.ttf')]
-      : [path.join(FONTS_DIR, 'tahoma.ttf'), 'C:/Windows/Fonts/tahoma.ttf', path.join(FONTS_DIR, 'Sarabun-Regular.ttf')]
-  } else if (norm.includes('segoe')) {
-    candidates = isBold
-      ? [path.join(FONTS_DIR, 'segoeuib.ttf'), 'C:/Windows/Fonts/segoeuib.ttf', path.join(FONTS_DIR, 'Sarabun-Bold.ttf')]
-      : [path.join(FONTS_DIR, 'segoeui.ttf'), 'C:/Windows/Fonts/segoeui.ttf', path.join(FONTS_DIR, 'Sarabun-Regular.ttf')]
-  } else {
-    candidates = isBold ? thaiBoldFontCandidates : thaiFontCandidates
-  }
+  const fontMap = [
+    { names: ['angsa'], regular: ['AngsanaNew.ttf', 'AngsanaUPC.ttf'], bold: ['AngsanaNew-Bold.ttf', 'AngsanaUPC-Bold.ttf'] },
+    { names: ['sarabun'], regular: ['Sarabun-Regular.ttf'], bold: ['Sarabun-Bold.ttf'] },
+    { names: ['noto sans thai', 'noto'], regular: ['NotoSansThai-Regular.ttf'], bold: ['NotoSansThai-Bold.ttf'] },
+    { names: ['tahoma'], regular: ['tahoma.ttf'], bold: ['tahomabd.ttf'] },
+    { names: ['arial'], regular: ['arial.ttf'], bold: ['arialbd.ttf'] },
+    { names: ['calibri'], regular: ['calibri.ttf'], bold: ['calibrib.ttf'] },
+    { names: ['courier new'], regular: ['cour.ttf'], bold: ['courbd.ttf'] },
+    { names: ['georgia'], regular: ['georgia.ttf'], bold: ['georgiab.ttf'] },
+    { names: ['times new roman'], regular: ['times.ttf'], bold: ['timesbd.ttf'] },
+    { names: ['verdana'], regular: ['verdana.ttf'], bold: ['verdanab.ttf'] },
+    { names: ['segoe ui'], regular: ['segoeui.ttf'], bold: ['segoeuib.ttf'] },
+    { names: ['cordia new'], regular: ['cordia.ttf'], bold: ['cordiab.ttf'] },
+    { names: ['browallia new'], regular: ['browa.ttf'], bold: ['browab.ttf'] },
+    { names: ['leelawadee ui'], regular: ['leelawad.ttf'], bold: ['leelawdb.ttf'] },
+  ]
+  const selected = fontMap.find((font) => font.names.some((name) => norm === name || norm.includes(name)))
+  const candidates = selected
+    ? [
+        ...(isBold ? selected.bold : selected.regular).map((fileName) => path.join(FONTS_DIR, fileName)),
+        ...(isBold ? thaiBoldFontCandidates : thaiFontCandidates),
+      ]
+    : isBold
+      ? thaiBoldFontCandidates
+      : thaiFontCandidates
 
   return embedBestFont(pdfDoc, candidates)
 }

@@ -15,7 +15,7 @@ import './App.css'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
-type Tool = 'move' | 'text' | 'delete'
+type Tool = 'move' | 'text' | 'mask' | 'delete'
 
 type Annotation = {
   id: string
@@ -29,6 +29,16 @@ type Annotation = {
   bold: boolean
   italic: boolean
   rotation: number
+}
+
+type Mask = {
+  id: string
+  page: number
+  x: number
+  y: number
+  width: number
+  height: number
+  color: string
 }
 
 type GuideLine = {
@@ -60,12 +70,28 @@ type RenderedPage = {
 
 const acceptedTypes = '.pdf,.docx,.xlsx,.pptx'
 const signatureAcceptedTypes = '.png,.jpg,.jpeg,.pdf'
-const fontOptions = ['Angsana New', 'Sarabun', 'Noto Sans Thai', 'Tahoma', 'Arial']
+const fontOptions = [
+  'Angsana New',
+  'Sarabun',
+  'Noto Sans Thai',
+  'Tahoma',
+  'Arial',
+  'Calibri',
+  'Courier New',
+  'Georgia',
+  'Times New Roman',
+  'Verdana',
+  'Segoe UI',
+  'Cordia New',
+  'Browallia New',
+  'Leelawadee UI',
+]
 const baseRenderScale = 1.35
 
 const toolConfig: Record<Tool, { label: string; icon: string; cursor: string }> = {
   move: { label: 'เลื่อนดู', icon: '✋', cursor: 'grab' },
   text: { label: 'เพิ่มข้อความ', icon: 'T', cursor: 'crosshair' },
+  mask: { label: 'แปะพื้นที่', icon: '■', cursor: 'crosshair' },
   delete: { label: 'ลบ', icon: '✕', cursor: 'pointer' },
 }
 
@@ -75,14 +101,17 @@ function App() {
   const [pdfName, setPdfName] = useState('')
   const [pages, setPages] = useState<RenderedPage[]>([])
   const [annotations, setAnnotations] = useState<Annotation[]>([])
+  const [masks, setMasks] = useState<Mask[]>([])
   const [signatures, setSignatures] = useState<Signature[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedSignatureId, setSelectedSignatureId] = useState<string | null>(null)
+  const [selectedMaskId, setSelectedMaskId] = useState<string | null>(null)
   const [activeTool, setActiveTool] = useState<Tool>('text')
   const [draftText, setDraftText] = useState('ทดสอบ ข้อความ')
   const [fontFamily, setFontFamily] = useState(fontOptions[0])
   const [fontSize, setFontSize] = useState(24)
   const [color, setColor] = useState('#111827')
+  const [maskColor, setMaskColor] = useState('#ffffff')
   const [bold, setBold] = useState(false)
   const [italic, setItalic] = useState(false)
   const [rotation, setRotation] = useState(0)
@@ -91,6 +120,14 @@ function App() {
   const [warning, setWarning] = useState('')
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [draggingSignatureId, setDraggingSignatureId] = useState<string | null>(null)
+  const [draggingMaskId, setDraggingMaskId] = useState<string | null>(null)
+  const [maskDraft, setMaskDraft] = useState<{
+    page: number
+    startX: number
+    startY: number
+    endX: number
+    endY: number
+  } | null>(null)
   const [zoomPercent, setZoomPercent] = useState(100)
   const [renderZoomPercent, setRenderZoomPercent] = useState(100)
   const [showRuler, setShowRuler] = useState(true)
@@ -188,9 +225,11 @@ function App() {
     setError('')
     setWarning('')
     setAnnotations([])
+    setMasks([])
     setSignatures([])
     setSelectedId(null)
     setSelectedSignatureId(null)
+    setSelectedMaskId(null)
 
     try {
       if (sourceFile.name.toLowerCase().endsWith('.pdf')) {
@@ -229,7 +268,7 @@ function App() {
     const target = event.target as HTMLElement
 
     // If clicking on annotation or signature, let their own handlers manage it
-    if (target.closest('.annotation-box') || target.closest('.signature-overlay')) {
+    if (target.closest('.annotation-box') || target.closest('.signature-overlay') || target.closest('.mask-overlay')) {
       return
     }
 
@@ -239,6 +278,8 @@ function App() {
 
     if (activeTool === 'text') {
       addAnnotation(page.pageNumber, relX, relY)
+    } else if (activeTool === 'mask') {
+      finishMask(page.pageNumber, relX, relY)
     } else if (activeTool === 'delete') {
       // Delete mode: clicking empty area does nothing
     }
@@ -246,6 +287,15 @@ function App() {
   }
 
   function handlePagePointerDown(_page: RenderedPage, event: PointerEvent<HTMLDivElement>) {
+    if (activeTool === 'mask') {
+      const rect = event.currentTarget.getBoundingClientRect()
+      const x = clamp((event.clientX - rect.left) / rect.width, 0, 1)
+      const y = clamp((event.clientY - rect.top) / rect.height, 0, 1)
+      setMaskDraft({ page: _page.pageNumber, startX: x, startY: y, endX: x, endY: y })
+      event.currentTarget.setPointerCapture(event.pointerId)
+      return
+    }
+
     if (activeTool === 'move') {
       const panel = documentPanelRef.current
       if (!panel) return
@@ -261,6 +311,33 @@ function App() {
   }
 
   function handlePagePointerMove(pageNumber: number, event: PointerEvent<HTMLDivElement>) {
+    if (draggingMaskId) {
+      const mask = masks.find((item) => item.id === draggingMaskId)
+      const pageElement = pageRefs.current[pageNumber]
+      if (mask?.page === pageNumber && pageElement) {
+        const rect = pageElement.getBoundingClientRect()
+        updateMask(mask.id, {
+          x: clamp((event.clientX - rect.left) / rect.width - mask.width / 2, 0, 1 - mask.width),
+          y: clamp((event.clientY - rect.top) / rect.height - mask.height / 2, 0, 1 - mask.height),
+        })
+      }
+      return
+    }
+
+    if (maskDraft?.page === pageNumber) {
+      const rect = event.currentTarget.getBoundingClientRect()
+      setMaskDraft((current) =>
+        current
+          ? {
+              ...current,
+              endX: clamp((event.clientX - rect.left) / rect.width, 0, 1),
+              endY: clamp((event.clientY - rect.top) / rect.height, 0, 1),
+            }
+          : current,
+      )
+      return
+    }
+
     if (activeTool === 'move' && isPanning) {
       const panel = documentPanelRef.current
       if (!panel) return
@@ -279,9 +356,57 @@ function App() {
   }
 
   function handlePagePointerUp() {
+    if (draggingMaskId) {
+      setDraggingMaskId(null)
+    }
+    if (maskDraft) {
+      finishMask(maskDraft.page, maskDraft.endX, maskDraft.endY)
+    }
     if (isPanning) {
       setIsPanning(false)
     }
+  }
+
+  function finishMask(pageNumber: number, endX: number, endY: number) {
+    if (!maskDraft || maskDraft.page !== pageNumber) return
+    const x = Math.min(maskDraft.startX, endX)
+    const y = Math.min(maskDraft.startY, endY)
+    const width = Math.abs(endX - maskDraft.startX)
+    const height = Math.abs(endY - maskDraft.startY)
+    setMaskDraft(null)
+
+    if (width < 0.005 || height < 0.005) return
+    const mask: Mask = { id: createId(), page: pageNumber, x, y, width, height, color: maskColor }
+    setMasks((current) => [...current, mask])
+    setSelectedMaskId(mask.id)
+    setSelectedId(null)
+    setSelectedSignatureId(null)
+  }
+
+  function handleMaskPointerDown(id: string, event: PointerEvent<HTMLDivElement>) {
+    event.stopPropagation()
+    if (activeTool === 'delete') {
+      removeMask(id)
+      return
+    }
+    setSelectedMaskId(id)
+    setSelectedId(null)
+    setSelectedSignatureId(null)
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setDraggingMaskId(id)
+  }
+
+  function updateMask(id: string, next: Partial<Mask>) {
+    setMasks((current) => current.map((mask) => (mask.id === id ? { ...mask, ...next } : mask)))
+  }
+
+  function removeMask(id: string) {
+    setMasks((current) => current.filter((mask) => mask.id !== id))
+    if (selectedMaskId === id) setSelectedMaskId(null)
+  }
+
+  function removeSelectedMask() {
+    if (selectedMaskId) removeMask(selectedMaskId)
   }
 
   function handleRulerClick(
@@ -586,6 +711,7 @@ function App() {
     const baseName = pdfName.replace(/\.[^.]+$/, '') || 'edited'
     formData.append('file', pdfBlob, pdfName || 'document.pdf')
     formData.append('annotations', JSON.stringify(annotations))
+    formData.append('masks', JSON.stringify(masks))
     formData.append('signatures', JSON.stringify(signatures))
 
     setBusyLabel(label)
@@ -690,6 +816,7 @@ function App() {
                     setActiveTool(tool)
                     setSelectedId(null)
                     setSelectedSignatureId(null)
+                    setSelectedMaskId(null)
                   }}
                   title={toolConfig[tool].label}
                 >
@@ -698,7 +825,7 @@ function App() {
                 </button>
               ))}
             </div>
-            <p className="tool-hint">{toolConfig[activeTool].label}: {activeTool === 'move' ? 'ลากบนเอกสารเพื่อเลื่อนดู' : activeTool === 'text' ? 'คลิกบนเอกสารเพื่อวางข้อความ' : 'คลิกที่ข้อความหรือลายเซ็นเพื่อลบ'}</p>
+            <p className="tool-hint">{toolConfig[activeTool].label}: {activeTool === 'move' ? 'ลากบนเอกสารเพื่อเลื่อนดู' : activeTool === 'text' ? 'คลิกบนเอกสารเพื่อวางข้อความ' : activeTool === 'mask' ? 'ลากเพื่อเลือกพื้นที่และปิดข้อความเดิม' : 'คลิกที่ข้อความ ลายเซ็น หรือพื้นที่เพื่อ ลบ'}</p>
           </section>
 
           {/* --- Text Tools (only visible when text tool is active or text is selected) --- */}
@@ -843,6 +970,34 @@ function App() {
                   ลบ
                 </button>
               </div>
+            </section>
+          )}
+
+          {(activeTool === 'mask' || selectedMaskId) && (
+            <section className="mask-tools" aria-label="Mask tools">
+              <h3 className="section-title">แปะพื้นที่</h3>
+              <label>
+                สีพื้นที่ปิดข้อความ
+                <input
+                  type="color"
+                  value={maskColor}
+                  onChange={(event) => {
+                    const nextColor = event.target.value
+                    setMaskColor(nextColor)
+                    if (selectedMaskId) {
+                      setMasks((current) =>
+                        current.map((mask) =>
+                          mask.id === selectedMaskId ? { ...mask, color: nextColor } : mask,
+                        ),
+                      )
+                    }
+                  }}
+                />
+              </label>
+              <p className="tool-hint">ลากบนเอกสารเพื่อสร้างพื้นที่ปิดทับ ข้อความใหม่จะอยู่ด้านบน</p>
+              <button type="button" disabled={!selectedMaskId} onClick={removeSelectedMask}>
+                ลบพื้นที่ที่เลือก
+              </button>
             </section>
           )}
 
@@ -1125,6 +1280,38 @@ function App() {
                             </span>
                           </div>
                         ))}
+
+                    {/* Masks: rendered before text so new text stays on top */}
+                    {masks
+                      .filter((mask) => mask.page === page.pageNumber)
+                      .map((mask) => (
+                        <div
+                          key={mask.id}
+                          className={`mask-overlay ${mask.id === selectedMaskId ? 'selected' : ''}`}
+                          style={{
+                            left: `${mask.x * 100}%`,
+                            top: `${mask.y * 100}%`,
+                            width: `${mask.width * 100}%`,
+                            height: `${mask.height * 100}%`,
+                            backgroundColor: mask.color,
+                          }}
+                          onPointerDown={(event) => handleMaskPointerDown(mask.id, event)}
+                          onPointerUp={() => setDraggingMaskId(null)}
+                        />
+                      ))}
+
+                    {maskDraft?.page === page.pageNumber && (
+                      <div
+                        className="mask-overlay mask-draft"
+                        style={{
+                          left: `${Math.min(maskDraft.startX, maskDraft.endX) * 100}%`,
+                          top: `${Math.min(maskDraft.startY, maskDraft.endY) * 100}%`,
+                          width: `${Math.abs(maskDraft.endX - maskDraft.startX) * 100}%`,
+                          height: `${Math.abs(maskDraft.endY - maskDraft.startY) * 100}%`,
+                          backgroundColor: maskColor,
+                        }}
+                      />
+                    )}
 
                     {/* Text Annotations */}
                     {annotations

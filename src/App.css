@@ -193,7 +193,7 @@
 
 .tool-buttons {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
 }
 
@@ -897,6 +897,7 @@ button:focus-visible,
 /* --- Annotation Box --- */
 .annotation-box {
   position: absolute;
+  z-index: 10;
   transform: translate(-2px, -50%);
   width: auto;
   max-width: 70%;
@@ -917,6 +918,27 @@ button:focus-visible,
 .annotation-box.selected {
   border-color: var(--accent);
   background: rgba(255, 255, 255, 0.65);
+}
+
+/* --- Mask Overlay --- */
+.mask-overlay {
+  position: absolute;
+  z-index: 2;
+  border: 1px solid transparent;
+  cursor: move;
+  touch-action: none;
+}
+
+.mask-overlay.selected,
+.mask-overlay:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.35);
+}
+
+.mask-draft {
+  pointer-events: none;
+  opacity: 0.72;
+  border: 1px dashed var(--accent);
 }
 
 /* --- Signature Overlay --- */
