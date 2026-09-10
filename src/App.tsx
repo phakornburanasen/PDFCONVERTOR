@@ -71,6 +71,7 @@ type RenderedPage = {
 const acceptedTypes = '.pdf,.docx,.xlsx,.pptx'
 const signatureAcceptedTypes = '.png,.jpg,.jpeg,.pdf'
 const fontOptions = [
+  'TH Sarabun New',
   'Angsana New',
   'Sarabun',
   'Noto Sans Thai',
@@ -613,7 +614,12 @@ function App() {
       const img = await loadImage(dataUrl)
       const defaultWidth = 0.15 // 15% of page width
       const aspectRatio = img.height / img.width
-      const defaultHeight = defaultWidth * aspectRatio
+      // x/y/width/height are stored as percentages of the rendered page.
+      // Convert the image's pixel aspect ratio into the page's coordinate ratio
+      // so the preview and the exported PDF use the same physical dimensions.
+      const pageSize = pages[0]
+      const pageAspectRatio = pageSize ? pageSize.width / pageSize.height : 1
+      const defaultHeight = defaultWidth * aspectRatio * pageAspectRatio
 
       const signature: Signature = {
         id: createId(),

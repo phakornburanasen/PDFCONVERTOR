@@ -29,9 +29,13 @@ const PORT = Number(process.env.PORT || 4000)
 const HOST = process.env.HOST || '0.0.0.0'
 const allowedOfficeExtensions = new Set(['docx', 'xlsx', 'pptx'])
 const thaiFontCandidates = [
+  path.join(FONTS_DIR, 'THSarabunNew.ttf'),
   path.join(FONTS_DIR, 'AngsanaNew.ttf'),
   path.join(FONTS_DIR, 'AngsanaUPC.ttf'),
   path.join(FONTS_DIR, 'Sarabun-Regular.ttf'),
+  path.join(FONTS_DIR, 'cordia.ttf'),
+  path.join(FONTS_DIR, 'browa.ttf'),
+  path.join(FONTS_DIR, 'leelawad.ttf'),
   path.join(FONTS_DIR, 'tahoma.ttf'),
   path.join(FONTS_DIR, 'segoeui.ttf'),
   'C:/Windows/Fonts/Sarabun-Regular.ttf',
@@ -44,9 +48,13 @@ const thaiFontCandidates = [
   '/usr/share/fonts/truetype/noto/NotoSansThai-Regular.ttf',
 ]
 const thaiBoldFontCandidates = [
+  path.join(FONTS_DIR, 'THSarabunNew Bold.ttf'),
   path.join(FONTS_DIR, 'AngsanaNew-Bold.ttf'),
   path.join(FONTS_DIR, 'AngsanaUPC-Bold.ttf'),
   path.join(FONTS_DIR, 'Sarabun-Bold.ttf'),
+  path.join(FONTS_DIR, 'cordiab.ttf'),
+  path.join(FONTS_DIR, 'browab.ttf'),
+  path.join(FONTS_DIR, 'leelawdb.ttf'),
   path.join(FONTS_DIR, 'tahomabd.ttf'),
   path.join(FONTS_DIR, 'segoeuib.ttf'),
   'C:/Windows/Fonts/Sarabun-Bold.ttf',
@@ -160,7 +168,10 @@ app.post('/api/pdf/save', upload.single('file'), async (req, res) => {
       const page = pdfDoc.getPage(sig.page - 1)
       const { width, height } = page.getSize()
       const sigWidth = (Number(sig.width) || 0.15) * width
-      const sigHeight = (Number(sig.height) || 0.1) * width
+      // Signature dimensions are normalized against the page's own axes.
+      // Using width for both axes stretches signatures on portrait pages and
+      // makes the saved result differ from the editor preview.
+      const sigHeight = (Number(sig.height) || 0.1) * height
       const centerX = clamp(Number(sig.x) || 0, 0, 1) * width
       const centerY = height - clamp(Number(sig.y) || 0, 0, 1) * height
       const rot = Number(sig.rotation) || 0
@@ -424,6 +435,7 @@ function parseSignatures(value) {
 async function resolveFont(pdfDoc, familyName, isBold) {
   const norm = String(familyName || '').toLowerCase().trim()
   const fontMap = [
+    { names: ['th sarabun new', 'thsarabunnew', 'th sarabun'], regular: ['THSarabunNew.ttf'], bold: ['THSarabunNew Bold.ttf'] },
     { names: ['angsa'], regular: ['AngsanaNew.ttf', 'AngsanaUPC.ttf'], bold: ['AngsanaNew-Bold.ttf', 'AngsanaUPC-Bold.ttf'] },
     { names: ['sarabun'], regular: ['Sarabun-Regular.ttf'], bold: ['Sarabun-Bold.ttf'] },
     { names: ['noto sans thai', 'noto'], regular: ['NotoSansThai-Regular.ttf'], bold: ['NotoSansThai-Bold.ttf'] },
